@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peter - extração offline LIBRAS-EQT-UECE</title>
+  </head>
+  <body>
+    <main>
+      <h1>Extração offline de landmarks</h1>
+      <p>Ferramenta de desenvolvimento. Não altera nem integra a interface principal.</p>
+      <label>
+        Manifesto dos vídeos
+        <input id="manifest" type="file" accept="application/json,.json">
+      </label>
+      <label>
+        Vídeos RGB selecionados
+        <input id="videos" type="file" accept="video/mp4" multiple webkitdirectory>
+      </label>
+      <button id="extract" type="button">Extrair e exportar</button>
+      <pre id="status" role="status">Aguardando os vídeos e o manifesto.</pre>
+    </main>
+    <script type="module" src="./libras-eqt-extractor.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.local
+tools/local-stt/.venv/
+tools/local-stt/model/
+tools/local-stt/*.zip
+.codex-vitest-tmp/
+__pycache__/
+*.py[cod]
+public/qa-audio.html
+public/qa-eu.wav
