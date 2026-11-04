@@ -1,8 +1,10 @@
 import type { TranscriptionCallbacks, TranscriptionProvider } from "./speech-to-text-engine";
+import { NO_SPEECH_MESSAGE_PREFIX } from "./speech-to-text-engine";
 
 const TRANSCRIBE_URL = import.meta.env.DEV ? "/stt/transcribe" : "http://127.0.0.1:8765/transcribe";
 const SAMPLE_RATE = 16_000;
 const MAX_RECORDING_MS = 60_000;
+const NO_SPEECH_MESSAGE = `${NO_SPEECH_MESSAGE_PREFIX} nesse áudio. Tente falar mais perto do microfone.`;
 
 interface TranscriptionResult {
   readonly text?: unknown;
@@ -16,7 +18,11 @@ export class LocalSpeechTranscriptionProvider implements TranscriptionProvider {
   private chunks: Blob[] = [];
   private callbacks: TranscriptionCallbacks | undefined;
   private maxDurationTimer: ReturnType<typeof setTimeout> | undefined;
+  /** True while start() is still acquiring the health check, stream or recorder. */
+  private starting = false;
   private stopping = false;
+  /** Set when stop() arrives before the recorder exists; honored as soon as start() succeeds. */
+  private stopRequested = false;
 
   get supported(): boolean {
     return typeof window !== "undefined" &&
@@ -28,9 +34,10 @@ export class LocalSpeechTranscriptionProvider implements TranscriptionProvider {
   }
 
   async start(callbacks: TranscriptionCallbacks): Promise<void> {
-    if (!this.supported) throw new Error("Este navegador não oferece gravação de áudio local compatível.");
-    if (this.recorder) throw new Error("A captura do microfone já está ativa.");
+    if (this.recorder || this.starting) throw new Error("A captura do microfone já está ativa.");
 
+    this.starting = true;
+    this.stopRequested = false;
     this.callbacks = callbacks;
     this.chunks = [];
     this.stopping = false;
@@ -55,8 +62,10 @@ export class LocalSpeechTranscriptionProvider implements TranscriptionProvider {
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) this.chunks.push(event.data);
       };
-      recorder.onerror = () => {
-        void this.finish(new Error("A gravação do microfone foi interrompida."));
+      recorder.onerror = (event) => {
+        const cause = (event as unknown as { error?: { message?: string } }).error;
+        const detail = cause?.message ? ` Motivo: ${cause.message}` : "";
+        void this.finish(new Error(`A gravação do microfone foi interrompida.${detail}`));
       };
       recorder.onstop = () => { void this.transcribeRecording(); };
       await new Promise<void>((resolve, reject) => {
@@ -65,14 +74,24 @@ export class LocalSpeechTranscriptionProvider implements TranscriptionProvider {
           reject(error instanceof Error ? error : new Error("Não foi possível iniciar o microfone."));
         }
       });
+      this.starting = false;
       this.maxDurationTimer = setTimeout(() => this.stop(), MAX_RECORDING_MS);
+      // A stop() requested while getUserMedia/recorder were initializing is delivered now,
+      // so a quick microphone toggle never leaves the capture running.
+      if (this.stopRequested) this.stop();
     } catch (error) {
+      this.starting = false;
       this.releaseCapture();
       throw normalizeMicrophoneError(error);
     }
   }
 
   stop(): void {
+    if (this.starting) {
+      // The recorder does not exist yet; remember the request and finish it after start().
+      this.stopRequested = true;
+      return;
+    }
     if (!this.recorder || this.stopping) return;
     this.stopping = true;
     this.clearMaxDurationTimer();
@@ -105,7 +124,7 @@ export class LocalSpeechTranscriptionProvider implements TranscriptionProvider {
       if (!isTranscriptionResult(payload) || typeof payload.text !== "string") {
         throw new Error("O serviço local retornou uma transcrição inválida.");
       }
-      if (!payload.text.trim()) throw new Error("Não reconheci fala nesse áudio. Tente falar mais perto do microfone.");
+      if (!payload.text.trim()) throw new Error(NO_SPEECH_MESSAGE);
       callbacks.onFinalResult(payload.text.trim());
     } catch (error) {
       callbacks.onError(error instanceof TypeError
@@ -120,7 +139,12 @@ export class LocalSpeechTranscriptionProvider implements TranscriptionProvider {
   private async toWav(blob: Blob): Promise<Blob> {
     const audioContext = new AudioContext();
     try {
-      const decoded = await audioContext.decodeAudioData(await blob.arrayBuffer());
+      let decoded: AudioBuffer;
+      try {
+        decoded = await audioContext.decodeAudioData(await blob.arrayBuffer());
+      } catch {
+        throw new Error("Não foi possível ler o áudio gravado. Tente gravar novamente.");
+      }
       const frameCount = Math.ceil(decoded.duration * SAMPLE_RATE);
       const offline = new OfflineAudioContext(1, frameCount, SAMPLE_RATE);
       const source = offline.createBufferSource();
@@ -135,7 +159,7 @@ export class LocalSpeechTranscriptionProvider implements TranscriptionProvider {
     }
   }
 
-  private async finish(error: Error): Promise<void> {
+  private finish(error: Error): void {
     const callbacks = this.callbacks;
     this.releaseCapture();
     callbacks?.onError(error);
@@ -150,6 +174,8 @@ export class LocalSpeechTranscriptionProvider implements TranscriptionProvider {
     this.chunks = [];
     this.callbacks = undefined;
     this.stopping = false;
+    this.starting = false;
+    this.stopRequested = false;
   }
 
   private clearMaxDurationTimer(): void {
@@ -196,8 +222,19 @@ function isTranscriptionResult(value: unknown): value is TranscriptionResult {
 }
 
 function normalizeMicrophoneError(error: unknown): Error {
-  if (error instanceof DOMException && error.name === "NotAllowedError") {
-    return new Error("Permita o acesso ao microfone nas configurações do navegador.");
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError" || error.name === "SecurityError") {
+      return new Error("Permita o acesso ao microfone nas configurações do navegador.");
+    }
+    if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+      return new Error("Nenhum microfone foi encontrado. Conecte um dispositivo de áudio e tente novamente.");
+    }
+    if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+      return new Error("O microfone está ocupado por outro aplicativo. Feche-o e tente novamente.");
+    }
+    if (error.name === "OverconstrainedError") {
+      return new Error("O microfone disponível não suporta o formato de captura solicitado.");
+    }
   }
   return error instanceof Error ? error : new Error("Não foi possível iniciar o microfone.");
 }

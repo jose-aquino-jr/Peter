@@ -11,3 +11,10 @@ export interface TranscriptionProvider {
   start(callbacks: TranscriptionCallbacks): Promise<void>;
   stop(): void;
 }
+
+/**
+ * Shared wording that marks an empty capture as "no speech detected". Providers must start
+ * error messages for silent/unrecognized audio with this prefix so SpeechInputService can
+ * classify them as an expected outcome instead of a failure.
+ */
+export const NO_SPEECH_MESSAGE_PREFIX = "Não detectei fala";

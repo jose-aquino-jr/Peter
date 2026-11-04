@@ -83,7 +83,7 @@ export class LocalLLMProvider implements LanguageModel {
     context: readonly ConversationMessage[],
   ): Promise<LanguageModelReply> {
     try {
-      const history = context.slice(-12).map((message) => ({
+      const history = buildHistory(input, context).map((message) => ({
         role: message.role === "assistant" ? "assistant" : "user",
         content: message.text,
       }));
@@ -159,6 +159,33 @@ function isOllamaTagsResponse(
       "name" in model &&
       typeof model.name === "string",
     );
+}
+
+/**
+ * The Brain records the current user turn before asking the provider. Since
+ * generateResponse() appends the input as the final user message, keeping that
+ * turn in the history would send the same utterance twice. Remove only the
+ * exact current turn (role, timestamp and text), preserving earlier identical
+ * utterances.
+ */
+function buildHistory(
+  input: AssistantInput,
+  context: readonly ConversationMessage[],
+): readonly ConversationMessage[] {
+  const recent = context.slice(-13);
+  const last = recent.at(-1);
+  if (last && isCurrentInput(last, input)) {
+    recent.pop();
+  }
+  return recent.slice(-12);
+}
+
+function isCurrentInput(message: ConversationMessage, input: AssistantInput): boolean {
+  if (message.role !== "user" || message.timestamp !== input.timestamp) {
+    return false;
+  }
+  const currentText = input.type === "sign" ? input.recognition.gloss : input.text;
+  return message.text === currentText;
 }
 
 function parseReply(content: string): LanguageModelReply {
