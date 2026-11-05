@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ConversationMessage } from "../core/messages";
 import { LocalLLMEngine } from "./local-llm-engine";
 
 afterEach(() => {
@@ -133,5 +134,109 @@ describe("LocalLLMEngine", () => {
       model: "qwen2.5:0.5b",
       message: expect.stringContaining("LLM_STATUS = UNAVAILABLE"),
     });
+  });
+
+  it("does not send the current transcription twice when context already contains it", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        message: {
+          content: JSON.stringify({
+            text: "Resposta",
+            intent: "conversation",
+            emotion: "neutral",
+            gesture: "nod",
+          }),
+        },
+      }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new LocalLLMEngine("http://localhost:11434/api/chat", "local-test");
+    const context: ConversationMessage[] = [
+      { id: "assistant-0", role: "assistant", text: "Olá!", timestamp: 0 },
+      { id: "user-123", role: "user", text: "Explique inteligência artificial", timestamp: 123 },
+    ];
+
+    await model.generateResponse(
+      { type: "transcription", timestamp: 123, text: "Explique inteligência artificial" },
+      context,
+    );
+
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(request.messages.filter((message) => message.content === "Explique inteligência artificial"))
+      .toHaveLength(1);
+    expect(request.messages.at(-1)?.content).toBe("Explique inteligência artificial");
+    expect(request.messages.some((message) => message.content === "Olá!")).toBe(true);
+  });
+
+  it("does not send the current recognized sign twice when context already contains it", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        message: {
+          content: JSON.stringify({
+            text: "De nada!",
+            intent: "acknowledge",
+            emotion: "happy",
+            gesture: "nod",
+          }),
+        },
+      }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new LocalLLMEngine("http://localhost:11434/api/chat", "local-test");
+    const context: ConversationMessage[] = [
+      { id: "assistant-0", role: "assistant", text: "Olá!", timestamp: 0 },
+      { id: "user-9", role: "user", text: "OBRIGADO", timestamp: 9 },
+    ];
+
+    await model.generateResponse(
+      {
+        type: "sign",
+        timestamp: 9,
+        recognition: { sign: "obrigado", gloss: "OBRIGADO", confidence: 0.9, timestamp: 9 },
+      },
+      context,
+    );
+
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(request.messages.filter((message) => message.content === "OBRIGADO")).toHaveLength(0);
+    expect(request.messages.at(-1)?.content).toContain("OBRIGADO");
+    expect(request.messages.some((message) => message.content === "Olá!")).toBe(true);
+  });
+
+  it("preserves an earlier identical utterance while removing only the current turn", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        message: {
+          content: JSON.stringify({
+            text: "Resposta",
+            intent: "conversation",
+            emotion: "neutral",
+            gesture: "nod",
+          }),
+        },
+      }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new LocalLLMEngine("http://localhost:11434/api/chat", "local-test");
+    const context: ConversationMessage[] = [
+      { id: "user-1", role: "user", text: "repetir", timestamp: 1 },
+      { id: "assistant-1", role: "assistant", text: "Certo.", timestamp: 2 },
+      { id: "user-3", role: "user", text: "repetir", timestamp: 3 },
+    ];
+
+    await model.generateResponse(
+      { type: "transcription", timestamp: 3, text: "repetir" },
+      context,
+    );
+
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(request.messages.filter((message) => message.content === "repetir")).toHaveLength(2);
+    expect(request.messages.at(-1)?.content).toBe("repetir");
   });
 });

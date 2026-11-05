@@ -1,7 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import { InMemoryEventBus } from "../core/event-bus";
-import type { LanguageModel } from "./language-model";
+import type { AssistantInput } from "../core/messages";
+import type { LanguageModel, LanguageModelReply } from "./language-model";
 import { EventDrivenBrainEngine } from "./event-driven-brain-engine";
+
+function reply(text: string): LanguageModelReply {
+  return {
+    text,
+    source: "local-llm",
+    intent: "conversation",
+    emotion: "neutral",
+    gesture: "nod",
+  };
+}
 
 describe("EventDrivenBrainEngine", () => {
   it("uses the model for a phrase without a matching rule", async () => {
@@ -122,5 +133,117 @@ describe("EventDrivenBrainEngine", () => {
       "Oi", "Estou bem.", "Tudo bem?",
     ]);
     brain.stop();
+  });
+
+  it("serializes turns so a second request starts only after the first finishes", async () => {
+    const events = new InMemoryEventBus();
+    let releaseFirst = () => {};
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const called: string[] = [];
+    const model: LanguageModel = {
+      generateResponse: vi.fn(async (input: AssistantInput): Promise<LanguageModelReply> => {
+        const text = input.type === "sign" ? input.recognition.gloss : input.text;
+        called.push(text);
+        if (text === "primeira") {
+          await firstGate;
+        }
+        return reply(`resposta ${text}`);
+      }),
+    };
+    const responses: string[] = [];
+    events.on("brain.response", ({ response }) => responses.push(response.text));
+    const brain = new EventDrivenBrainEngine(events, model);
+    brain.start();
+
+    events.emit({ type: "voice.transcription", text: "primeira", timestamp: 1 });
+    await vi.waitFor(() => expect(called).toEqual(["primeira"]));
+
+    events.emit({ type: "voice.transcription", text: "segunda", timestamp: 2 });
+    await Promise.resolve();
+    expect(called).toEqual(["primeira"]);
+
+    releaseFirst();
+    await vi.waitFor(() =>
+      expect(responses).toEqual(["resposta primeira", "resposta segunda"]),
+    );
+    expect(called).toEqual(["primeira", "segunda"]);
+    expect(brain.getConversation().map((message) => message.text)).toEqual([
+      "primeira",
+      "resposta primeira",
+      "segunda",
+      "resposta segunda",
+    ]);
+    brain.stop();
+  });
+
+  it("keeps the queue usable after a failed primary turn and still uses the fallback", async () => {
+    const events = new InMemoryEventBus();
+    let attempts = 0;
+    const model: LanguageModel = {
+      generateResponse: vi.fn(async (input: AssistantInput): Promise<LanguageModelReply> => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("Ollama indisponível");
+        }
+        return reply(`modelo ${input.type === "sign" ? input.recognition.gloss : input.text}`);
+      }),
+    };
+    const fallback: LanguageModel = {
+      generateResponse: vi.fn(async (): Promise<LanguageModelReply> => ({
+        text: "resposta offline",
+        source: "rules",
+        intent: "conversation",
+        emotion: "neutral",
+        gesture: "listen",
+      })),
+    };
+    const responses: string[] = [];
+    events.on("brain.response", ({ response }) => responses.push(response.text));
+    const brain = new EventDrivenBrainEngine(events, model, fallback);
+    brain.start();
+
+    events.emit({ type: "voice.transcription", text: "primeira", timestamp: 1 });
+    await vi.waitFor(() => expect(responses).toEqual(["resposta offline"]));
+
+    events.emit({ type: "voice.transcription", text: "segunda", timestamp: 2 });
+    await vi.waitFor(() =>
+      expect(responses).toEqual(["resposta offline", "modelo segunda"]),
+    );
+    expect(brain.getConversation().map((message) => message.text)).toEqual([
+      "primeira",
+      "resposta offline",
+      "segunda",
+      "modelo segunda",
+    ]);
+    brain.stop();
+  });
+
+  it("does not publish or append a response that finishes after stop", async () => {
+    const events = new InMemoryEventBus();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const model: LanguageModel = {
+      generateResponse: vi.fn(async (): Promise<LanguageModelReply> => {
+        await gate;
+        return reply("resposta tardia");
+      }),
+    };
+    const responses: string[] = [];
+    events.on("brain.response", ({ response }) => responses.push(response.text));
+    const brain = new EventDrivenBrainEngine(events, model);
+    brain.start();
+
+    events.emit({ type: "voice.transcription", text: "em andamento", timestamp: 1 });
+    await vi.waitFor(() => expect(model.generateResponse).toHaveBeenCalledOnce());
+    brain.stop();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(responses).toEqual([]);
+    expect(brain.getConversation()).toEqual([]);
   });
 });
