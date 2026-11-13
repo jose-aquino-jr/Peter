@@ -1,0 +1,13 @@
+achado,evidência,implicação
+Paridade Python–TypeScript,delta máximo 2.22e-16 em 72 pares de teste,"a análise usa o algoritmo real, não uma aproximação"
+Validação perfeitamente separável,"6/6 positivos, 0 FP, AUC 1,0",validação fácil demais; não representa o teste
+Teste sem reconhecimento,"0/6 positivos, 0 FP, AUC 0,370","falha de ranking, não de limiar"
+Melhor limiar possível no teste,"threshold 0,49 → 6 TP e 12 FP",não existe ponto de operação com alta sensibilidade e especificidade
+Forma da mão é o componente frágil,"AUC 0,167 no teste vs 1,0 na validação",a representação de forma não é invariante ao informante
+Cobertura não explica,"teste tem handCoverage ~0,98; SIM = 1,0",não é oclusão; é geometria
+Informante 5 é OOD,"distância média teste SIM × treino ~5,4 vs validação ~2,4",o split de teste mede generalização cross-informant
+Pesos não corrigem,"AUC de teste 0,17–0,44 em todos os pesos",não há combinação linear que recupere o ranking
+Normalização não corrige,"ombro ≡ nenhuma; AUC de teste 0,37–0,38",o esqueleto já é normalizado pelos ombros
+Máscara de visibilidade não corrige,"AUC de teste 0,574, mas 10 FP no melhor ponto",ignorar blocos invisíveis remove sinal junto com ruído
+Janela DTW não corrige,"0/6 no teste para janelas 0,10/0,28/0,50",o alinhamento temporal não é o gargalo
+Amostra pequena,"recall de teste IC95% ~0,00–0,39","resultados são hipóteses, não estimativas precisas"

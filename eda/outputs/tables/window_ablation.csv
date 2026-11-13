@@ -1,0 +1,7 @@
+janela,split,auc,true_positive,false_positive,balanced_accuracy
+0.1,validation,1.0,5,0,0.9166666666666667
+0.1,test,0.39814814814814814,0,0,0.5
+0.28,validation,1.0,6,0,1.0
+0.28,test,0.37037037037037035,0,0,0.5
+0.5,validation,1.0,6,0,1.0
+0.5,test,0.37037037037037035,0,0,0.5

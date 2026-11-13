@@ -1,0 +1,11 @@
+configuração,split,motivo,amostras
+default,validation,below_threshold,18
+default,validation,matched,6
+default,test,below_threshold,24
+historical-experimental,validation,matched,19
+historical-experimental,validation,below_threshold,5
+historical-experimental,test,below_threshold,20
+historical-experimental,test,matched,4
+validation-selected,validation,below_threshold,18
+validation-selected,validation,matched,6
+validation-selected,test,below_threshold,24

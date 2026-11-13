@@ -1,0 +1,4 @@
+dataset_split,n,pearson_hand_visibility_vs_score
+test,24,0.5806644490524462
+train,18,
+validation,24,0.6530317186556326

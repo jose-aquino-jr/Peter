@@ -1,0 +1,10 @@
+dataset_split,class_name,1,2,3
+test,CAIR,0,4,2
+test,JA,0,6,0
+test,LUZ,0,6,0
+test,SIM,0,6,0
+train,SIM,6,6,6
+validation,CAIR,6,0,0
+validation,JA,3,0,3
+validation,LUZ,5,0,1
+validation,SIM,6,0,0

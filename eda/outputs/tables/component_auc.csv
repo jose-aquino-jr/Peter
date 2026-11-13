@@ -1,0 +1,7 @@
+split,componente,auc
+validation,forma da mão,1.0
+validation,trajetória,1.0
+validation,combinado,1.0
+test,forma da mão,0.16666666666666663
+test,trajetória,0.4351851851851852
+test,combinado,0.37037037037037035

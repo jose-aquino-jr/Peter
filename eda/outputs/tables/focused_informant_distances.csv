@@ -1,0 +1,7 @@
+comparação,n,média,mediana
+teste SIM × treino,108,5.357,5.781
+validação SIM × treino,108,2.401,1.24
+teste SIM × validação SIM,36,5.858,5.86
+dentro de teste SIM,30,1.2,1.149
+dentro de validação SIM,30,0.804,0.667
+dentro do treino,306,2.953,3.328

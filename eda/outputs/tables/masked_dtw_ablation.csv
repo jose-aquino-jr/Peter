@@ -1,0 +1,3 @@
+split,auc,melhor_threshold,melhor_ba,tp_no_melhor,fp_no_melhor,score_pos_min,score_pos_max,score_neg_min,score_neg_max
+validation,0.16666666666666666,0.3,0.5,6.0,18.0,0.9538908146754417,1.0,1.0,1.0
+test,0.5740740740740741,0.95,0.6388888888888888,5.0,10.0,0.8536350629201614,1.0,0.867131894361347,1.0

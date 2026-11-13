@@ -1,0 +1,13 @@
+# Ambiente virtual e caches locais
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Sistema operacional / editores
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Saídas são versionadas de propósito: elas documentam os resultados reais.
+# Se quiser regenerar tudo do zero, apague outputs/ e execute os notebooks.
